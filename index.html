@@ -1,0 +1,105 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LiveSnap Camera</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:20px;background:#090a10;color:white;font-family:Arial,sans-serif;text-align:center}
+h1{color:#ff4b96}
+p{color:#bbb}
+video{width:100%;max-height:55vh;object-fit:cover;border-radius:18px;background:#20212c}
+button{width:100%;padding:16px;margin-top:12px;border:0;border-radius:14px;font-size:16px;font-weight:bold;background:linear-gradient(90deg,#ff236b,#a52cff);color:white;touch-action:manipulation}
+button:disabled{opacity:.4}
+#status{margin:14px 0;color:#ddd;font-size:14px}
+a{display:block;padding:16px;margin-top:12px;background:#242638;border-radius:12px;color:white;text-decoration:none}
+canvas{display:none}
+</style>
+</head>
+<body>
+<h1>📸 LiveSnap</h1>
+<p>Ambil foto dan rekam video pendek dari kamera HP.</p>
+<video id="cam" autoplay playsinline muted></video>
+<button id="open">BUKA KAMERA</button>
+<button id="take" disabled>AMBIL FOTO</button>
+<button id="rec" disabled>REKAM 3 DETIK</button>
+<div id="status">Tekan Buka Kamera untuk memulai.</div>
+<canvas id="canvas"></canvas>
+<div id="result"></div>
+<script>
+const cam=document.getElementById('cam');
+const openBtn=document.getElementById('open');
+const takeBtn=document.getElementById('take');
+const recBtn=document.getElementById('rec');
+const statusBox=document.getElementById('status');
+const canvas=document.getElementById('canvas');
+const result=document.getElementById('result');
+let stream=null, recorder=null, chunks=[], timer=null, url=null;
+
+function message(text){statusBox.textContent=text}
+
+openBtn.addEventListener('click',async()=>{
+ try{
+  message('Meminta izin kamera...');
+  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false});
+  cam.srcObject=stream;
+  await cam.play();
+  takeBtn.disabled=false;
+  recBtn.disabled=false;
+  message('Kamera aktif! Pilih Ambil Foto atau Rekam.');
+ }catch(e){
+  message('Kamera gagal dibuka. Izinkan akses kamera dan buka situs melalui HTTPS di Chrome.');
+ }
+});
+
+takeBtn.addEventListener('click',()=>{
+ if(!cam.videoWidth){message('Tunggu sampai kamera siap.');return}
+ canvas.width=cam.videoWidth;
+ canvas.height=cam.videoHeight;
+ canvas.getContext('2d').drawImage(cam,0,0);
+ canvas.toBlob(blob=>{
+  if(!blob){message('Foto gagal dibuat.');return}
+  showResult(blob,'Foto','jpg');
+ },'image/jpeg',0.95);
+});
+
+function showResult(blob,label,extension){
+ if(url)URL.revokeObjectURL(url);
+ url=URL.createObjectURL(blob);
+ result.replaceChildren();
+ const link=document.createElement('a');
+ link.href=url;
+ link.download='livesnap.'+extension;
+ link.textContent='⬇ SIMPAN '+label.toUpperCase();
+ result.appendChild(link);
+ message(label+' berhasil dibuat!');
+}
+
+recBtn.addEventListener('click',()=>{
+ if(!stream)return;
+ if(!window.MediaRecorder){message('Browser tidak mendukung rekaman. Coba Chrome terbaru.');return}
+ const mime=['video/mp4','video/webm;codecs=vp8','video/webm'].find(x=>MediaRecorder.isTypeSupported(x));
+ try{chunks=[];recorder=new MediaRecorder(stream,mime?{mimeType:mime}:undefined)}
+ catch(e){message('Perekaman tidak tersedia di browser ini.');return}
+ recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
+ recorder.onstop=()=>{
+  const type=recorder.mimeType||'video/webm';
+  showResult(new Blob(chunks,{type}),'Video',type.includes('mp4')?'mp4':'webm');
+  recBtn.disabled=false;
+ };
+ recorder.start();
+ recBtn.disabled=true;
+ let left=3;
+ message('Merekam... '+left);
+ timer=setInterval(()=>{
+  left--;
+  if(left>0)message('Merekam... '+left);
+  else{clearInterval(timer);recorder.stop()}
+ },1000);
+});
+</script>
+</body>
+  </html>
+  
